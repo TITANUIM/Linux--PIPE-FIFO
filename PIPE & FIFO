@@ -1,0 +1,159 @@
+
+/*******************************************************PIPE**************************************************************/
+
+// 1. 父进程调⽤用pipe开辟管道,得到两个文件描述符指向管道的两端。
+// 2. 父进程调⽤用fork创建子进程,那么子进程也有两个文件描述符指向同⼀管道。 
+// 3. 父进程关闭管道读端,子进程关闭管道写端。父进程可以往管道里写,子进程可以
+// 从管道里读,管道是用环形队列实现的,数据从写端流入从读端流出,这样就实现了进程间通信。
+
+#include<stdio.h>
+#include<unistd.h>
+#include<errno.h>
+#include<string.h>
+#include<stdlib.h>
+#include<sys/types.h>
+#include<sys/wait.h>
+
+int main()
+{
+	int fd_pipe[2];
+	if(pipe(fd_pipe) < 0)
+	{
+		printf("errno:%d,strerror:%s\n",errno,strerror(errno));
+	}
+
+	pid_t id = fork();
+	if(id < 0)
+	{
+		printf("error!\n");
+	}
+	else if(id == 0) //child
+	{
+		close(fd_pipe[0]);//读端关闭
+		const char* msg = "hello hacker!";
+		int count = 5;
+		while(count-- >= 0)
+		{
+			write(fd_pipe[1],msg,strlen(msg));
+			sleep(1);
+		}
+	}
+	else   //father
+	{
+		close(fd_pipe[1]);//写端关闭
+
+		char buf[1024];
+		memset(buf,'\0',sizeof(buf));
+
+		int count = 5;
+		while(count-- > 0)
+		{
+			memset(buf,'\0',sizeof(buf));
+			read(fd_pipe[0],buf,sizeof(buf)-1);
+			printf("child->father: %s\n",buf);
+		}
+
+		pid_t ret = waitpid(id,NULL,0);
+		if(ret > 0)
+		{
+			printf("wait success,%d\n",ret);
+		}
+		else
+		{	
+			printf("wait failed,%d\n",ret);
+		}
+	}
+	return 0;
+}
+
+
+
+/***********************************************************FIFO**************************************************************/
+
+// 管道的一个不足之处是没有名字，因此，只能用于具有亲缘关系的进程间通信，
+// 在命名管道（named pipe或FIFO）提出后，该限制得到了克服。FIFO不同于管道
+// 之处在于它提供一个路径名与之关联，以FIFO的文件形式存储于文件系统中。
+// 命名管道是一个设备文件，因此，即使进程与创建FIFO的进程不存在亲缘关系，
+// 只要可以访问该路径，就能够通过FIFO 相互通信
+
+ // read端：
+ #include <stdio.h> 
+#include <sys/types.h> 
+#include <sys/stat.h> 
+#include <unistd.h> 
+#include <fcntl.h> 
+#include <string.h> 
+#define _PATH_ "/tmp/file.tmp" 
+#define _SIZE_ 100 
+int main() 
+{
+int fd = open(_PATH_, O_RDONLY);
+ if(fd < 0)
+{  
+    printf("open file error!\n");                   		
+    return 1;                   	
+}          	
+char buf[_SIZE_];          
+memset(buf, '\0', sizeof(buf));      
+while(1)
+{          	
+    int ret = read(fd, buf, sizeof(buf));                   		
+    if (ret <= 0)//error or end of file                   	
+    {              
+       printf("read end or error!\n");            
+       break;                     
+    }           
+    printf("%s\n", buf);                
+   if( strncmp(buf, "quit", 4) == 0 )
+    {       
+       break;    
+    }  
+}            
+close(fd);    
+return 0;          
+} 
+
+
+// write端：
+#include <stdio.h> 
+#include <sys/types.h> 
+#include <sys/stat.h> 
+#include <unistd.h> 
+#include <string.h> 
+#include <fcntl.h> 
+#define _PATH_ "/tmp/file.tmp" 
+#define _SIZE_ 100 
+int main() 
+{ 	
+   int ret = mkfifo(_PATH_,0666｜S_IFIFO);          	
+   if(ret == -1)
+   {          		
+       printf("mkfifo error\n");                   		
+       return 1;                   	
+   }          	
+   int fd = open(_PATH_, O_WRONLY);          	
+   if(fd < 0)
+   {          		
+      printf("open error\n");                   	
+   }          	
+   char buf[_SIZE_];          	
+   memset(buf, '\0', sizeof(buf));          	
+  while(1)
+  {           		
+     scanf("%s", buf);                   		
+     int ret = write(fd, buf, strlen(buf)+1);                   		
+     if(ret < 0)
+     {                   			
+       printf("write error\n");                            			
+       break;                            		
+     }                   		
+    if( strncmp(buf, "quit", 4) == 0 )
+    {                   			
+       break;                            		
+    }                   	
+  }              
+close(fd); 	
+return 0;          
+} 
+
+
